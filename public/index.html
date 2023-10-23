@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WhatsApp Web App</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+</head>
+<body>
+    <h1>WhatsApp Web App</h1>
+    <button id="show-qrcode">Show QR Code</button>
+    <form action="http://localhost:3000/send-messages" method="post" enctype="multipart/form-data">
+        <h2>Send Messages</h2>
+        <input type="file" name="csv" accept=".csv" required>
+        <textarea name="message" required></textarea>
+        <button type="submit">Send Messages</button>
+    </form>
+    <form action="http://localhost:3000/send-media" method="post" enctype="multipart/form-data">
+        <h2>Send Media Files</h2>
+        <input type="file" name="csv" accept=".csv" required>
+        <input type="file" name="mediaFilePath" accept="image/*" required>
+        <button type="submit">Send Media Files</button>
+    </form>
+    <img id="qrcode" alt="QR Code">
+    <script src="app.js"></script>
+</body>
+</html>
+
