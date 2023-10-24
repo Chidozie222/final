@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+app.use(express.json())
 const { Client, MessageMedia, NoAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const session = require('express-session');
@@ -8,21 +9,87 @@ const csv = require('csv-parser'); // For parsing CSV files
 const cors = require('cors');
 app.use(cors())
 const fs = require('fs');
-const { promisify } = require('util');
-
+const { promisify, log } = require('util');
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 app.use(session({
   secret: 'your-secret-key',
   resave: false,
   saveUninitialized: true,
 }));
+let mongoUrl = "mongodb+srv://john:fugZrMMyLCnb8In9@cluster0.cyzwmu6.mongodb.net/?retryWrites=true&w=majority";
+
+mongoose
+  .connect(mongoUrl, {
+    useNewUrlParser: true,
+  })
+  .then(() => {
+    console.log("Connected to database");
+  })
+  .catch((e) => console.log(e));
+require("./mongodb")
+
+const user = mongoose.model("whatsapp")
+const JWT_SECRET =
+  "hvdvay6ert72839289()aiyg8t87qt72393293883uhefiuh78ttq3ifi78272jbkj?[]]pou89ywe";
+
+app.post("/register", async(req, res) => {
+  const {Username, email, password} = req.body;
+  const secret = await bcrypt.hash(password, 10)
+
+  try {
+    const olduser = await user.findOne({email: email})
+    if(olduser){
+      return res.send({error: "User exists, Please sign in"})
+    } else{
+        await user.create({
+          Username,
+          email,
+          password: secret
+        })
+        res.send({status: "ok"}) 
+    }
+  } catch (error) {
+    res.send({error: error})
+  }
+})
+
+app.post('/signin', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const User = await user.findOne({ email: email }); // Use 'User' to access the user model
+    if (!user) {
+      return res.status(400).json({ error: 'Please sign up' });
+    } else {
+      const passwordMatch = await bcrypt.compare(password, User.password); // Assuming user.password exists in your database
+      if (passwordMatch) {
+        return res.status(201).json({ status: 'ok'});
+      } else {
+        return res.status(401).json({ error: 'Invalid password' });
+      }
+    }
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post ("/userData", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const file = await user.findOne({email: email})
+    res.send({status: "ok", data: file})
+  } catch (error) { 
+    res.send({error: "there is an error in the server"})
+  }
+});
+
+
 
 app.use(express.json());
-
-// Create an array to store multiple WhatsApp client instances
 const clients = {};
-
-// Function to create or retrieve a client instance based on the user's session
-function getClient(sessionId) {
+function getClient(sessionId, readyCallback) {
   if (!clients[sessionId]) {
     // Create a new WhatsApp client for the user
     clients[sessionId] = new Client({
@@ -42,7 +109,13 @@ function getClient(sessionId) {
 
     // Handle 'ready' and 'error' events for the client
     clients[sessionId].on('ready', () => {
-      console.log(`Client ${sessionId} is ready`);
+      const readyMessage = `Client ${sessionId} is ready`;
+
+      if (typeof readyCallback === 'function') {
+        readyCallback(readyMessage);
+      }
+
+      console.log(readyMessage);
     });
 
     clients[sessionId].on('error', (error) => {
@@ -53,10 +126,8 @@ function getClient(sessionId) {
   return clients[sessionId];
 }
 
-// Define a flag to track whether the QR code has been sent for each user
 const qrSent = {};
 
-// Handle user sessions and initialize WhatsApp clients
 app.get('/user/:sessionId/qr', (req, res) => {
   const sessionId = req.params.sessionId;
 
@@ -83,7 +154,6 @@ app.get('/user/:sessionId/qr', (req, res) => {
     res.send('QR code not available yet.');
   }
 });
-// Create a storage engine for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
@@ -96,7 +166,6 @@ const Storage = multer.diskStorage({
   },
 });
 const uploads = multer({ storage: Storage });
-// Define a POST route for sending messages
 app.post('/user/:sessionId/send-messages', upload.single('csv'), async (req, res) => {
   const sessionId = req.params.sessionId;
   const client = getClient(sessionId);
@@ -134,8 +203,6 @@ app.post('/user/:sessionId/send-messages', upload.single('csv'), async (req, res
 
 });
 
-// Define a POST route for sending media files (similar to the previous route)
-
 app.post('user/:sessionId/send-media', uploads.fields([{ name: 'media', maxCount: 1 }, { name: 'csv', maxCount: 1 }]), async (req, res) => {
     const sessionId = req.params.sessionId;
     const client = getClient(sessionId);
@@ -162,6 +229,7 @@ app.post('user/:sessionId/send-media', uploads.fields([{ name: 'media', maxCount
       res.status(500).json({ success: false, message: 'Error sending media', error: error.message });
     }
   });
+  
   
 
 app.listen(3000, () => {
