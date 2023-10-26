@@ -149,6 +149,9 @@ app.get('/user/:sessionId/qr', (req, res) => {
           // Check if it hasn't been sent in the meantime
           if (!qrData[sessionId].sent) {
             qrData[sessionId].sent = true; // Mark as sent
+            res.status(200); // Set the HTTP status code to 200
+  res.contentType('application/json'); // Set the content type
+  res.setHeader('Custom-Header', 'dataUrl'); // Set a custom header
             res.send(`
               <html>
                 <body>
