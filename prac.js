@@ -89,16 +89,13 @@ app.post ("/userData", async (req, res) => {
 
 app.use(express.json());
 const clients = {};
+// Function to get or create a WhatsApp client for a specific session
 function getClient(sessionId, readyCallback) {
   if (!clients[sessionId]) {
     // Create a new WhatsApp client for the user
     clients[sessionId] = new Client({
       authStrategy: new NoAuth(),
-    //   puppeteer: {
-    //     headless: false
-    //   },
       session: {
-        // Provide a path to store session data
         path: `./sessions/session_${sessionId}.json`,
         clientName: `User_${sessionId}`,
       },
@@ -126,34 +123,51 @@ function getClient(sessionId, readyCallback) {
   return clients[sessionId];
 }
 
-const qrSent = {};
+const qrData = {}; // Store QR code data for each session
 
+// Handle the route for serving the QR code
 app.get('/user/:sessionId/qr', (req, res) => {
   const sessionId = req.params.sessionId;
 
-  if (!qrSent[sessionId]) {
-    const client = getClient(sessionId);
+  if (!qrData[sessionId]) {
+    qrData[sessionId] = {
+      data: null,
+      sent: false,
+    };
+  }
 
-    client.on('qr', (qrCodeData) => {
+  const client = getClient(sessionId);
+
+  client.on('qr', (qrCodeData) => {
+    // Only send the new QR code if it has changed
+    if (qrData[sessionId].data !== qrCodeData) {
+      qrData[sessionId].data = qrCodeData;
+      qrData[sessionId].sent = false; // Mark as not sent
+
       qrcode.toDataURL(qrCodeData, (err, dataUrl) => {
         if (!err) {
-          qrSent[sessionId] = true; // Mark QR code as sent for this user
-          res.send(`
-            <html>
-              <body>
-                <img src="${dataUrl}" alt="QR Code" />
-              </body>
-            </html>
-          `);
+          // Check if it hasn't been sent in the meantime
+          if (!qrData[sessionId].sent) {
+            qrData[sessionId].sent = true; // Mark as sent
+            res.send(`
+              <html>
+                <body>
+                  <img src="${dataUrl}" alt="QR Code" />
+                </body>
+              </html>
+            `);
+          }
         } else {
           console.error(`Error generating QR code for user ${sessionId}:`, err);
         }
       });
-    });
-  } else {
-    res.send('QR code not available yet.');
-  }
+    } else {
+      res.send('QR code not available yet.');
+    }
+  });
 });
+
+
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
