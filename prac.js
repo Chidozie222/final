@@ -64,7 +64,7 @@ app.post('/signin', async (req, res) => {
     } else {
       const passwordMatch = await bcrypt.compare(password, User.password); // Assuming user.password exists in your database
       if (passwordMatch) {
-        return res.status(201).json({ status: 'ok'});
+        return res.status(201).json({ status: 'ok', User: User});
       } else {
         return res.status(401).json({ error: 'Invalid password' });
       }
@@ -123,50 +123,42 @@ function getClient(sessionId, readyCallback) {
   return clients[sessionId];
 }
 
-const qrData = {}; // Store QR code data for each session
+// Track whether the QR code has been sent
+const qrSent = {};
 
 // Handle the route for serving the QR code
 app.get('/user/:sessionId/qr', (req, res) => {
   const sessionId = req.params.sessionId;
 
-  if (!qrData[sessionId]) {
-    qrData[sessionId] = {
-      data: null,
-      sent: false,
-    };
-  }
+  if (!qrSent[sessionId]) {
+    const client = getClient(sessionId);
 
-  const client = getClient(sessionId);
-
-  client.on('qr', (qrCodeData) => {
-    // Only send the new QR code if it has changed
-    if (qrData[sessionId].data !== qrCodeData) {
-      qrData[sessionId].data = qrCodeData;
-      qrData[sessionId].sent = false; // Mark as not sent
-
+    const qrHandler = (qrCodeData) => {
       qrcode.toDataURL(qrCodeData, (err, dataUrl) => {
         if (!err) {
-          // Check if it hasn't been sent in the meantime
-          if (!qrData[sessionId].sent) {
-            qrData[sessionId].sent = true; // Mark as sent
-            return res.send(`
-              <html>
-                <body>
-                  <img src="${dataUrl}" alt="QR Code" />
-                </body>
-              </html>
-            `);
-            return 
-          }
+          qrSent[sessionId] = true; // Mark QR code as sent for this user
+          res.send(`
+            <html>
+              <body>
+                <img src="${dataUrl}" alt="QR Code" />
+              </body>
+            </html>
+          `);
+
+          // Remove the event listener to stop further QR code sends
+          client.removeListener('qr', qrHandler);
         } else {
           console.error(`Error generating QR code for user ${sessionId}:`, err);
         }
       });
-    } else {
-      res.send('QR code not available yet.');
-    }
-  });
+    };
+
+    client.on('qr', qrHandler);
+  } else {
+    res.send('QR code not available yet.');
+  }
 });
+
 
 
 const storage = multer.memoryStorage();
