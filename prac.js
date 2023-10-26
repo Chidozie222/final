@@ -149,8 +149,7 @@ app.get('/user/:sessionId/qr', (req, res) => {
           // Check if it hasn't been sent in the meantime
           if (!qrData[sessionId].sent) {
             qrData[sessionId].sent = true; // Mark as sent
-            res.setHeader('Custom-Header', 'dataUrl'); // Set a custom header
-            res.send(`
+            return res.send(`
               <html>
                 <body>
                   <img src="${dataUrl}" alt="QR Code" />
