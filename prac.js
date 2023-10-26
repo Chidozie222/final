@@ -156,6 +156,7 @@ app.get('/user/:sessionId/qr', (req, res) => {
                 </body>
               </html>
             `);
+            return 
           }
         } else {
           console.error(`Error generating QR code for user ${sessionId}:`, err);
